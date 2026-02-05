@@ -22,4 +22,3 @@ $ duplicate ~/dir/ | sh
 dependencies
 
 - uthash
-- xxhash
