@@ -7,9 +7,9 @@ Speed
 $ find ~/dir/ -type f | wc -l
 6017
 $ time duplicate ~/dir/ >/dev/null
-real	0m 0.55s
-user	0m 0.02s
-sys	0m 0.52s
+real	0m 0.06s
+user	0m 0.01s
+sys	0m 0.05s
 
 Examples
 
