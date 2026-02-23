@@ -1,107 +1,135 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dirent.h>
+#include <unistd.h>
 #include <sys/stat.h>
+#include <limits.h>
 #include <uthash.h>
 
-#define CHECK_BYTES 4096
+#define SMALL 4096
+#define MULT 3
 
-struct filehash {
+struct hash {
    size_t size;
    char *path;
    UT_hash_handle hh;
 };
 
-struct filehash *filehashes = NULL;
+struct hash *hashes = NULL;
 
-static inline size_t
-filesize(const char *path) {
-   static struct stat st;
-   stat(path, &st);
-   return st.st_size;
+void *
+emalloc(size_t size) {
+   void *tmp = malloc(size);
+   if(!tmp) {
+      fprintf(stderr, "duplicate: Out of memory\n");
+      exit(1);
+   }
+   return tmp;
 }
 
 int
-is_duplicate(const char *path1, const char *path2, size_t size) {
-   static char buf1[CHECK_BYTES];
-   static char buf2[CHECK_BYTES];
-   char *bigbuf1, *bigbuf2;
-   FILE *f1, *f2;
-   f1 = fopen(path1, "r");
-   f2 = fopen(path2, "r");
-   fread(buf1, 1, CHECK_BYTES, f1);
-   fread(buf2, 1, CHECK_BYTES, f2);
-   if(strcmp(buf1, buf2) != 0)
-      return 0;
-   bigbuf1 = malloc(size-CHECK_BYTES+1);
-   if(!bigbuf1) {
-      fprintf(stderr, "Out of memory\n");
-      exit(1);
+is_same_file(const char *path1, const char *path2, size_t size) {
+   static char buf1[SMALL+1], buf2[SMALL+1];
+   FILE *f1 = fopen(path1, "r");
+   FILE *f2 = fopen(path2, "r");
+   int b = 0;
+   if(size <= SMALL) {
+      fread(buf1, 1, size, f1);
+      fread(buf2, 1, size, f2);
+      if(strncmp(buf1, buf2, size) == 0)
+         b = 1;
+   } else {
+      fread(buf1, 1, SMALL, f1);
+      fread(buf2, 1, SMALL, f2);
+      if(strncmp(buf1, buf2, SMALL) == 0) {
+         int start = SMALL;
+         char *bbuf1, *bbuf2;
+         bbuf1 = emalloc(size-SMALL+1);
+         bbuf2 = emalloc(size-SMALL+1);
+         int n;
+         for(;;start *= MULT) {
+            n = fread(bbuf1, 1, start, f1);
+            if(n <= 0) {
+               b = 1;
+               break;
+            }
+            fread(bbuf2, 1, start, f2);
+            if(strncmp(bbuf1, bbuf2, n) != 0)
+               break;
+         }
+         free(bbuf1);
+         free(bbuf2);
+      }
    }
-   bigbuf2 = malloc(size-CHECK_BYTES+1);
-   if(!bigbuf2) {
-      fprintf(stderr, "Out of memory\n");
-      exit(1);
-   }
-   fread(bigbuf1, 1, size-CHECK_BYTES, f1);
-   fread(bigbuf2, 1, size-CHECK_BYTES, f2);
-   return strcmp(bigbuf1, bigbuf2) == 0 ? 1 : 0;
+   fclose(f1);
+   fclose(f2);
+   return b;
 }
 
-static void
-process_dir(const char *parent_path) {
-   DIR *dir;
-   static struct dirent *d;
+void
+process_dir(char *path, int len) {
+   size_t dirsize = 1000;
+   char **dirs = emalloc(dirsize*sizeof(char*));
+   size_t dirn = 0;
+   static struct dirent *ent;
+   static struct stat st;
 
-   dir = opendir(parent_path);
-   if(!dir) {
-      fprintf(stderr, "%s: Couldn't open directory\n", parent_path);
-      return;
-   }
-   while((d = readdir(dir))) {
-      char path[PATH_MAX];
-      if(d->d_name[0] == '.')
-         continue;
-      snprintf(path, sizeof(path), "%s/%s", parent_path, d->d_name);
-      if(d->d_type == DT_DIR) {
-         process_dir(path);
-      } else {
-         struct filehash *f, *suspect;
-         size_t size;
-
-         size = filesize(path);
-         if(!size)
-            continue;
-
-         f = malloc(sizeof(struct filehash));
-         if(!f) {
-            fprintf(stderr, "Out of memory\n");
-            exit(1);
+   DIR *dir = opendir(".");
+   while(ent = readdir(dir)) {
+      if(ent->d_type == DT_DIR && strcmp(ent->d_name, ".") && strcmp(ent->d_name, "..")) {
+         if(dirn >= dirsize) {
+            dirs = realloc(dirs, dirsize *= 2);
+            if(!dirs) {
+               fprintf(stderr, "duplicate: Out of memory\n");
+               exit(1);
+            }
          }
-         f->size = size;
-
-         f->path = strdup(path);
-         HASH_FIND(hh,filehashes,&f->size,sizeof(size_t),suspect);
-         if(!suspect) {
-            HASH_ADD(hh,filehashes,size,sizeof(size_t),f);
-         } else if(is_duplicate(path, suspect->path, size)) {
-               printf("rm %s # %s\n", path, suspect->path);
-               continue;
+         dirs[dirn++] = strdup(ent->d_name);
+      } else if(ent->d_type == DT_REG) {
+         struct hash *suspect;
+         stat(ent->d_name, &st);
+         if(!st.st_size)
+            continue;
+         HASH_FIND_INT(hashes, &st.st_size, suspect);
+         if(suspect) {
+            if(is_same_file(ent->d_name, suspect->path, st.st_size))
+               printf("rm %s%s # %s\n", path, ent->d_name, suspect->path);
+         } else {
+            struct hash *new = emalloc(sizeof(struct hash));
+            new->path = emalloc(len+strlen(ent->d_name)+1);
+            new->size = st.st_size;
+            strcpy(new->path, path);
+            strcpy(new->path+len, ent->d_name);
+            HASH_ADD_INT(hashes, size, new);
          }
       }
    }
+   for(int i = dirn-1; i >= 0; i--) {
+      size_t ent_len = strlen(dirs[i]);
+      strcpy(path+len, dirs[i]);
+      strcpy(path + len + ent_len, "/");
+      chdir(dirs[i]);
+      free(dirs[i]);
+      process_dir(path, len+ent_len+1);
+   }
    closedir(dir);
+   free(dirs);
+   chdir("..");
 }
 
 int
 main(int argc, char **argv) {
    if(argc < 2)
       return 1;
-   for(int i = 1; i < argc; i++) {
-      size_t len;
-      len = strlen(argv[i]);
-      while(argv[i][--len] == '/')
-         argv[i][len] = '\0';
-      process_dir(argv[i]);
+   char *path = emalloc(PATH_MAX+1);
+   size_t len = strlen(argv[1]);
+   strcpy(path, argv[1]);
+   if(path[len-1] != '/') {
+      path[len] = '/';
+      path[len+1] = '\0';
    }
+   chdir(path);
+   process_dir(path, len);
+   free(path);
 }

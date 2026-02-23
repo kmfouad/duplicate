@@ -1,24 +1,24 @@
-duplicate
+blazing fast duplicate detector written in 135 lines of C code
 
-Find all duplicate files in a directory and optionally delete them
+FEAUTRES
+- doesn't remove the files, instead prints output which can be piped into a shell "rm duplicate-file # file"
+- skips symbolic links
+- skips blank files
 
-Speed
+ALGORITHM
+- scan a file
+- if it's size is unique then add it to the scanned files and stop
+otherwise
+- set n = 4096
+- compare n bytes of both files if they differ then stop
+- set n = n * 3 and continue by checking the next n bytes of each file, if they differ then stop
+- if all bytes are exhauseted then the files are duplicates
 
-$ find ~/dir/ -type f | wc -l
-6017
-$ time duplicate ~/dir/ >/dev/null
+depends on uthash
+
+$ find ~/dir -type f | wc -l
+6282
+$ time duplicate ~/dir >/dev/null
 real	0m 0.06s
-user	0m 0.01s
+user	0m 0.00s
 sys	0m 0.05s
-
-Examples
-
-# find all duplicates
-$ duplicate ~/dir/
-rm /home/exa/dir/file.png # /home/exa/dir/copy1/file.png
-# delete all duplicates
-$ duplicate ~/dir/ | sh
-
-dependencies
-
-- uthash
