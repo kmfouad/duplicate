@@ -123,12 +123,10 @@ main(int argc, char **argv) {
    if(argc < 2)
       return 1;
    char *path = emalloc(PATH_MAX+1);
-   size_t len = strlen(argv[1]);
-   strcpy(path, argv[1]);
-   if(path[len-1] != '/') {
-      path[len] = '/';
-      path[len+1] = '\0';
-   }
+   realpath(argv[1], path);
+   size_t len = strlen(path);
+   path[len++] = '/';
+   path[len] = '\0';
    chdir(path);
    process_dir(path, len);
    free(path);
