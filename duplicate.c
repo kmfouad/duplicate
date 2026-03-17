@@ -69,7 +69,7 @@ is_same_file(const char *path1, const char *path2, size_t size) {
 
 void
 process_dir(char *path, int len) {
-   size_t dirsize = 1000;
+   size_t dirsize = 20;
    char **dirs = emalloc(dirsize*sizeof(char*));
    size_t dirn = 0;
    static struct dirent *ent;
