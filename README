@@ -12,7 +12,7 @@ otherwise
 - set n = 4096
 - compare n bytes of both files if they differ then stop
 - set n = n * 3 and continue by checking the next n bytes of each file, if they differ then stop
-- if all bytes are exhauseted then the files are duplicates
+- if all bytes are exhausted then the files are duplicates
 
 depends on uthash
 
