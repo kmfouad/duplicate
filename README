@@ -19,6 +19,6 @@ depends on uthash
 $ find ~/dir -type f | wc -l
 6282
 $ time duplicate ~/dir >/dev/null
-real	0m 0.06s
-user	0m 0.00s
-sys	0m 0.05s
+real  0m 0.06s
+user  0m 0.00s
+sys   0m 0.05s
