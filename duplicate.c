@@ -79,7 +79,7 @@ process_dir(char *path, int len) {
    while(ent = readdir(dir)) {
       if(ent->d_type == DT_DIR && strcmp(ent->d_name, ".") && strcmp(ent->d_name, "..")) {
          if(dirn >= dirsize) {
-            dirs = realloc(dirs, dirsize *= 2);
+            dirs = realloc(dirs, (dirsize *= 2) * sizeof(char*));
             if(!dirs) {
                fprintf(stderr, "duplicate: Out of memory\n");
                exit(1);
